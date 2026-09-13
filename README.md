@@ -1,5 +1,93 @@
 # Luna — Autonomous Networking Agent
 
+# Luna — Autonomous Networking Agent
+
+**One request → Discover → Verify → Connect → Act**
+
+Luna is an autonomous networking agent for founders and professionals. Give Luna a networking goal once, and it works across multiple applications to discover relevant people, verify credible connection paths, prepare outreach, and help turn the connection into a real meeting.
+
+## Demo
+
+**2-Minute Demo:** https://youtu.be/rhd7PJBfB7w
+
+**Live App:** https://lunaagent.nc-connect.app
+
+---
+
+## 1. Project Overview
+
+Professional networking is fragmented across discovery, communication, contacts, and scheduling tools.
+
+Finding someone may start on GitHub or X. Understanding whether you know them requires searching Contacts, Gmail, or Slack. Outreach happens somewhere else, and scheduling requires another application.
+
+Luna turns this fragmented workflow into one agentic process.
+
+Example request:
+
+> Find me a technical cofounder in Toronto actively building AI agents. Find the strongest person I can realistically meet and help me get introduced.
+
+Luna can:
+
+1. Discover real candidates using GitHub and X.
+2. Rank candidates using source-grounded evidence.
+3. Search Google Contacts, Gmail, and Slack for credible connection paths.
+4. Refuse to invent a warm introduction when one cannot be verified.
+5. Fall back to direct outreach when no credible warm path exists.
+6. Prepare personalized Gmail outreach.
+7. Require explicit human approval before sending email.
+8. Check real Google Calendar availability.
+9. Require explicit approval before creating meetings.
+10. Execute approved actions through the connected applications.
+
+---
+
+## 2. External Apps Used
+
+Luna connects to six external applications:
+
+| App | How Luna Uses It |
+|---|---|
+| GitHub | Finds technical candidates and verifies technical/project activity |
+| X | Finds public professional and interest signals |
+| Google Contacts | Searches existing contacts for relationship paths |
+| Gmail | Verifies relationship history and sends approved outreach |
+| Slack | Searches the connected workspace for people and connection signals |
+| Google Calendar | Checks availability and creates approved meetings |
+
+---
+
+## 3. End-to-End Workflow
+
+```text
+NETWORKING GOAL
+      ↓
+DISCOVER
+GitHub + X
+      ↓
+RANK CANDIDATES
+Source-grounded evidence
+      ↓
+VERIFY CONNECTION PATH
+Google Contacts + Gmail + Slack
+      ↓
+Credible warm path?
+   ↙         ↘
+ YES         NO
+  ↓           ↓
+Warm intro   Direct outreach
+      ↘     ↙
+     PREPARE
+        ↓
+ HUMAN APPROVAL
+        ↓
+   Gmail execution
+        ↓
+Calendar availability
+        ↓
+ HUMAN APPROVAL
+        ↓
+ Meeting created
+
 This project was created with the [AgentCore CLI](https://github.com/aws/agentcore-cli).
 
 ## Project Structure
