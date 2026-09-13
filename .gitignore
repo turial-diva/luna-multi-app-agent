@@ -1,7 +1,19 @@
 .DS_Store
 
-# Nested app repo
-app/
+# Luna Agent secrets / local auth
+app/LunaAgent/.env
+app/LunaAgent/.google-token.json
+
+# Luna Agent dependencies / build output
+app/LunaAgent/node_modules/
+app/LunaAgent/dist/
+
+# Luna Agent local backups / editor files
+app/LunaAgent/*.backup
+app/LunaAgent/*.backup-*
+app/LunaAgent/*.before-*
+app/LunaAgent/tools/*.before-*
+app/LunaAgent/**/*.swp
 
 # Lambda generated/dependency files
 luna-api-lambda/node_modules/
@@ -12,3 +24,9 @@ luna-api-lambda/index.mjs.backup-*
 # AgentCore generated deployment state
 agentcore/.cli/deployed-state.json
 agentcore/aws-targets.json
+
+# Logs
+*.log
+
+# AgentCore CLI local state
+agentcore/.cli/
