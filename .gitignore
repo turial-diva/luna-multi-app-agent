@@ -1,0 +1,14 @@
+.DS_Store
+
+# Nested app repo
+app/
+
+# Lambda generated/dependency files
+luna-api-lambda/node_modules/
+luna-api-lambda/*.zip
+luna-api-lambda/response.json
+luna-api-lambda/index.mjs.backup-*
+
+# AgentCore generated deployment state
+agentcore/.cli/deployed-state.json
+agentcore/aws-targets.json

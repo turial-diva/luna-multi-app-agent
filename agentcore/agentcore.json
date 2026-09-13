@@ -7,7 +7,17 @@
     "agentcore:created-by": "agentcore-cli",
     "agentcore:project-name": "Luna"
   },
-  "runtimes": [],
+  "runtimes": [
+    {
+      "name": "LunaAgent",
+      "build": "CodeZip",
+      "entrypoint": "main.js",
+      "codeLocation": "app/LunaAgent/",
+      "runtimeVersion": "NODE_22",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP"
+    }
+  ],
   "memories": [],
   "knowledgeBases": [],
   "credentials": [],
