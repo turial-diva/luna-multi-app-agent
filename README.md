@@ -1,7 +1,5 @@
 # Luna — Autonomous Networking Agent
 
-# Luna — Autonomous Networking Agent
-
 **One request → Discover → Verify → Connect → Act**
 
 Luna is an autonomous networking agent for founders and professionals. Give Luna a networking goal once, and it works across multiple applications to discover relevant people, verify credible connection paths, prepare outreach, and help turn the connection into a real meeting.
