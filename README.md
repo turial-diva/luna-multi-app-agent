@@ -747,6 +747,7 @@ The production system can be verified through the live application:
 
 The demo shows the complete multi-application workflow, including discovery, relationship verification, approval boundaries, and real-world execution.
 
+---
 
 ## Documentation
 
@@ -754,9 +755,17 @@ The demo shows the complete multi-application workflow, including discovery, rel
 - [AgentCore CDK Constructs](https://github.com/aws/agentcore-l3-cdk-constructs)
 - [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/)
 
+---
 
 ## Demo
 
 🎥 **2-Minute Demo:** https://youtu.be/rhd7PJBfB7w
+🎥 **5-Minute Demo:** https://www.youtube.com/watch?v=k3xAZRK7skA&t=196s
 
 🌐 **Live Luna:** https://lunaagent.nc-connect.app
+
+---
+
+## License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
