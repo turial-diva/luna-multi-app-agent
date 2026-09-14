@@ -90,19 +90,30 @@ This project was created with the [AgentCore CLI](https://github.com/aws/agentco
 
 ## Project Structure
 
-```
-my-project/
-├── AGENTS.md               # AI coding assistant context
+```text
+luna-multi-app-agent/
+├── AGENTS.md
 ├── agentcore/
-│   ├── agentcore.json      # Project config (agents, memories, credentials, gateways, evaluators)
-│   ├── aws-targets.json    # Deployment targets (account + region)
-│   ├── .env.local          # Secrets — API keys (gitignored)
-│   ├── .llm-context/       # TypeScript type definitions for AI assistants
-│   │   ├── agentcore.ts    # AgentCoreProjectSpec types
-│   │   └── aws-targets.ts  # Deployment target types
-│   └── cdk/                # CDK infrastructure (@aws/agentcore-cdk)
-├── app/                    # Agent application code
-└── evaluators/             # Custom evaluator code (if any)
+│   ├── agentcore.json
+│   └── cdk/
+├── app/
+│   └── LunaAgent/
+│       ├── main.ts
+│       ├── tools/
+│       │   ├── github.ts
+│       │   ├── x.ts
+│       │   ├── google-contacts.ts
+│       │   ├── gmail.ts
+│       │   ├── gmail-send.ts
+│       │   ├── calendar.ts
+│       │   ├── calendar-create.ts
+│       │   ├── slack.ts
+│       │   └── pending-actions.ts
+│       ├── model/
+│       └── mcp_client/
+├── luna-api-lambda/
+│   └── index.mjs
+└── README.md
 ```
 
 ## Getting Started
