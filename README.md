@@ -70,6 +70,19 @@ Luna uses several AWS services around the Strands agent:
 | AWS IAM | Access control between AWS resources |
 | Amazon CloudWatch / AgentCore Observability | Logs, traces, debugging, and monitoring |
 
+---
+
+## Frontend & Agent Backend
+
+Luna's user-facing web application was built with **Lovable**, providing the interface for onboarding, authentication, connecting external services, and interacting with the agent.
+
+The core autonomous agent runs separately on **AWS**. Luna was built with the **Strands Agents SDK**, powered by **Amazon Bedrock**, and deployed to **Amazon Bedrock AgentCore Runtime**. The frontend connects to this backend through **Amazon API Gateway and AWS Lambda**, allowing user requests from the web app to trigger Luna's live agent workflows.
+
+In simple terms:
+
+**Lovable Frontend → API Gateway → AWS Lambda → AgentCore Runtime → Strands Agent → Amazon Bedrock → External Tools**
+
+The frontend is the interface; the autonomous reasoning, tool orchestration, approval handling, and execution happen in the AWS agent backend.
 
 ---
 
