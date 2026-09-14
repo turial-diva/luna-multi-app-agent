@@ -6,7 +6,7 @@ Luna is an autonomous networking agent for founders and professionals. Give Luna
 
 ## Demo
 
-**2-Minute Demo:** https://youtu.be/rhd7PJBfB7w
+**5-Minute Demo:** https://www.youtube.com/watch?v=k3xAZRK7skA&t=196s
 
 **Live App:** https://lunaagent.nc-connect.app
 
