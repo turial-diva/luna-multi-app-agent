@@ -473,85 +473,241 @@ It is to take the user's networking objective from **intent → evidence → con
 
 ## Getting Started
 
+Luna consists of two main backend components:
+
+1. **LunaAgent** — the Strands agent that runs on Amazon Bedrock AgentCore and contains Luna's reasoning, tools, and approval logic.
+2. **LunaAgentApi** — the AWS Lambda/API Gateway bridge that authenticates web requests, invokes the agent, and manages asynchronous jobs.
+
+The production version is already deployed and can be tested here:
+
+**Live App:** https://lunaagent.nc-connect.app
+
 ### Prerequisites
 
-- **Node.js** 20.x or later
-- **Python 3.10+** and **uv** for Python agents ([install uv](https://docs.astral.sh/uv/getting-started/installation/))
-- **AWS credentials** configured (`aws configure` or environment variables)
-- **Docker** (only for Container build agents)
+To run or deploy Luna yourself, you will need:
 
-### Development
+- Node.js 20+
+- npm
+- AWS CLI configured with an AWS account
+- Amazon Bedrock access
+- Amazon Bedrock AgentCore CLI
+- AWS credentials with permission to use the required AWS services
+- OAuth/API credentials for any external integrations you want to enable
 
-Run your agent locally:
+External integrations used by Luna:
+
+- GitHub
+- X
+- Google Contacts
+- Gmail
+- Google Calendar
+- Slack
+
+> Credentials, OAuth tokens, and local environment files are intentionally excluded from this public repository.
+
+---
+
+### 1. Install the Luna Agent
+
+The main Strands agent is located in:
+
+```text
+app/LunaAgent/
+```
+
+Install its dependencies:
 
 ```bash
+cd app/LunaAgent
+npm install
+```
+
+Build the TypeScript agent:
+
+```bash
+npm run build
+```
+
+The main agent entry point is:
+
+```text
+app/LunaAgent/main.ts
+```
+
+Individual integrations and actions are implemented under:
+
+```text
+app/LunaAgent/tools/
+```
+
+---
+
+### 2. Configure Credentials
+
+Luna does not hard-code production credentials in source code.
+
+Production secrets are stored using **AWS Secrets Manager**, while provider OAuth tokens and application state are stored server-side.
+
+The agent expects credentials for the integrations being used, including:
+
+```text
+Google OAuth
+GitHub OAuth/API
+X API
+Slack OAuth
+```
+
+Google integrations request the permissions required for:
+
+```text
+Contacts → read contacts
+Gmail → read relationship history + approved email sending
+Calendar → check availability + approved event creation
+```
+
+Never commit `.env`, OAuth token files, API keys, or client secrets to the repository.
+
+---
+
+### 3. Run the Agent Locally
+
+For development, Luna can be run using the AgentCore development environment:
+
+```bash
+cd ../..
 agentcore dev
 ```
 
-### Validate Invocation Input
+A local environment can be used to test Strands tool execution before deploying the agent to AWS.
 
-Validate runtime invocation payloads before forwarding them to an agent framework. Keep user prompts typed as strings
-and pass only prompt text to the agent.
+The development flow is:
 
-### Deployment
+```text
+Edit LunaAgent
+      ↓
+Build TypeScript
+      ↓
+Run locally
+      ↓
+Test tool execution
+      ↓
+Deploy to AgentCore
+```
 
-Deploy to AWS:
+---
+
+### 4. Deploy Luna to Amazon Bedrock AgentCore
+
+Luna's production agent runs on **Amazon Bedrock AgentCore**.
+
+From the project root:
 
 ```bash
 agentcore deploy
 ```
 
-## Commands
+The AgentCore deployment packages the agent and deploys the runtime resources required to execute Luna on AWS.
 
-| Command | Description |
-| --- | --- |
-| `agentcore create` | Create a new AgentCore project |
-| `agentcore add` | Add resources (agent, memory, credential, gateway, evaluator, policy) |
-| `agentcore remove` | Remove resources |
-| `agentcore dev` | Run agent locally with hot-reload |
-| `agentcore deploy` | Deploy to AWS via CDK |
-| `agentcore status` | Show deployment status |
-| `agentcore invoke` | Invoke agent (local or deployed) |
-| `agentcore logs` | View agent logs |
-| `agentcore traces` | View agent traces |
-| `agentcore eval` | Run evaluations |
-| `agentcore package` | Package agent artifacts |
-| `agentcore validate` | Validate configuration |
-| `agentcore pause` | Pause a deployed agent |
-| `agentcore resume` | Resume a paused agent |
-| `agentcore fetch` | Fetch remote resource definitions |
-| `agentcore import` | Import existing resources |
-| `agentcore update` | Check for CLI updates |
+The deployed flow becomes:
 
-## Configuration
+```text
+User request
+      ↓
+Luna Web App
+      ↓
+API Gateway
+      ↓
+AWS Lambda
+      ↓
+Amazon Bedrock AgentCore
+      ↓
+Strands Agent
+      ↓
+Amazon Bedrock
+      ↓
+Luna Tools
+```
 
-Edit the JSON files in `agentcore/` to configure your project. See `agentcore/.llm-context/` for type definitions and validation constraints.
+---
 
-The project uses a **flat resource model** — agents, memories, credentials, gateways, evaluators, and policies are top-level arrays in `agentcore.json`. Resources are independent; agents discover memories and credentials at runtime via environment variables or SDK calls.
+### 5. Install the API Bridge
 
-## Resources
+The browser-facing backend is located in:
 
-| Resource | Purpose |
-| --- | --- |
-| Agent (runtime) | HTTP, MCP, or A2A agent deployed to AgentCore Runtime |
-| Memory | Persistent context storage with configurable strategies |
-| Credential | API key or OAuth credential providers |
-| Gateway | MCP gateway that routes tool calls to targets |
-| Gateway Target | Tool implementation (Lambda, MCP server, OpenAPI, Smithy, API Gateway) |
-| Evaluator | Custom LLM-as-a-Judge or code-based evaluation |
-| Online Eval Config | Continuous evaluation pipeline for deployed agents |
-| Policy | Cedar authorization policies for gateway tools |
+```text
+luna-api-lambda/
+```
 
-### Agent Types
+Install its dependencies:
 
-- **Template agents**: Created from framework templates (Strands, LangChain/LangGraph, GoogleADK, OpenAI Agents, Autogen)
-- **BYO agents**: Bring your own code with `agentcore add agent --type byo`
-- **Import agents**: Import existing Bedrock agents with `agentcore import`
+```bash
+cd luna-api-lambda
+npm install
+```
 
-### Build Types
+This Lambda acts as the secure bridge between the Luna web application and AgentCore.
 
-- **CodeZip**: Python source packaged as a zip and deployed directly to AgentCore Runtime
-- **Container**: Docker image built via CodeBuild (ARM64), pushed to ECR, and deployed to AgentCore Runtime
+It handles:
+
+- authenticated requests
+- OAuth connection/callback flows
+- AgentCore invocation
+- asynchronous agent jobs
+- job-status polling
+- user-specific provider connections
+
+---
+
+### 6. Supporting AWS Infrastructure
+
+Luna uses several AWS services around the Strands agent:
+
+| Service | Purpose |
+|---|---|
+| Amazon Bedrock | Foundation-model reasoning |
+| Amazon Bedrock AgentCore | Production runtime for Luna |
+| Strands Agents SDK | Agent orchestration and tool calling |
+| Amazon API Gateway | Browser-facing API |
+| AWS Lambda | Authentication, OAuth, async jobs, and AgentCore bridge |
+| Amazon DynamoDB | Jobs, approval state, provider tokens, and application state |
+| AWS Secrets Manager | API and OAuth credentials |
+| AWS IAM | Access control between AWS resources |
+| Amazon CloudWatch / AgentCore Observability | Logs, traces, debugging, and monitoring |
+
+---
+
+### 7. Test Luna
+
+A simple discovery test:
+
+```text
+Find me a technical cofounder in Toronto actively building AI agents.
+Find the strongest person I can realistically meet and help me get introduced.
+```
+
+A Calendar tool test:
+
+```text
+Check my Google Calendar availability tomorrow from 10 AM to 12 PM.
+Do not create any event.
+```
+
+A key safety test is to ask Luna to perform a consequential action such as sending outreach.
+
+Luna should **prepare the action but stop before execution and request explicit human approval**.
+
+Only after a valid approval should the external action execute.
+
+---
+
+### 8. Verify the Deployment
+
+The production system can be verified through the live application:
+
+**Live Luna:** https://lunaagent.nc-connect.app
+
+The demo shows the complete multi-application workflow, including discovery, relationship verification, approval boundaries, and real-world execution.
+
 
 ## Documentation
 
