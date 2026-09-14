@@ -107,7 +107,13 @@ Calendar availability
 
 This project was created with the [AgentCore CLI](https://github.com/aws/agentcore-cli).
 
-## Project Structure
+```
+
+---
+
+## 4. Project Structure
+
+The repository is organized into the Strands agent, AWS infrastructure, API layer, and external-service tools:
 
 ```text
 luna-multi-app-agent/
@@ -136,6 +142,7 @@ luna-multi-app-agent/
 ```
 
 ---
+
 ## How Luna Was Built — From User Request to Real-World Action
 
 Luna is not a single API call or a chatbot connected to a few services. It is a multi-step agent system built by combining **Strands Agents SDK, Amazon Bedrock, Amazon Bedrock AgentCore, AWS infrastructure, and six external applications**.
