@@ -72,7 +72,7 @@ Luna uses several AWS services around the Strands agent:
 
 ---
 
-## Frontend & Agent Backend
+## 2.3. Frontend & Agent Backend
 
 Luna's user-facing web application was built with **Lovable**, providing the interface for onboarding, authentication, connecting external services, and interacting with the agent.
 
