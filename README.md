@@ -39,7 +39,7 @@ Luna can:
 
 ---
 
-## 2. External Apps Used
+## 2.1 External Apps Used
 
 Luna connects to six external applications:
 
@@ -51,6 +51,25 @@ Luna connects to six external applications:
 | Gmail | Verifies relationship history and sends approved outreach |
 | Slack | Searches the connected workspace for people and connection signals |
 | Google Calendar | Checks availability and creates approved meetings |
+
+---
+
+## 2.2. Supporting AWS Infrastructure
+
+Luna uses several AWS services around the Strands agent:
+
+| Service | Purpose |
+|---|---|
+| Amazon Bedrock | Foundation-model reasoning |
+| Amazon Bedrock AgentCore | Production runtime for Luna |
+| Strands Agents SDK | Agent orchestration and tool calling |
+| Amazon API Gateway | Browser-facing API |
+| AWS Lambda | Authentication, OAuth, async jobs, and AgentCore bridge |
+| Amazon DynamoDB | Jobs, approval state, provider tokens, and application state |
+| AWS Secrets Manager | API and OAuth credentials |
+| AWS IAM | Access control between AWS resources |
+| Amazon CloudWatch / AgentCore Observability | Logs, traces, debugging, and monitoring |
+
 
 ---
 
