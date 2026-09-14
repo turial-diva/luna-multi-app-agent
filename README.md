@@ -116,6 +116,361 @@ luna-multi-app-agent/
 └── README.md
 ```
 
+---
+## How Luna Was Built — From User Request to Real-World Action
+
+Luna is not a single API call or a chatbot connected to a few services. It is a multi-step agent system built by combining **Strands Agents SDK, Amazon Bedrock, Amazon Bedrock AgentCore, AWS infrastructure, and six external applications**.
+
+Here is the system in plain English.
+
+### 1. The user gives Luna a goal
+
+Everything starts with a natural-language request in the Luna web app.
+
+For example:
+
+> "Find me a technical cofounder in Toronto actively building AI agents. Find the strongest person I can realistically meet and help me get introduced."
+
+The user does not need to tell Luna which applications to search or every individual step to perform.
+
+---
+
+### 2. The request reaches the AWS backend
+
+```text
+Luna Web App
+      ↓
+Authenticated API
+      ↓
+Amazon API Gateway
+      ↓
+AWS Lambda
+      ↓
+Amazon Bedrock AgentCore
+```
+
+The web application authenticates the user and sends the request through an API built with **Amazon API Gateway and AWS Lambda**.
+
+Long-running agent requests are handled asynchronously. **Amazon DynamoDB** stores job state so the frontend can poll for the result without being limited by the API request timeout.
+
+Lambda then invokes Luna running in **Amazon Bedrock AgentCore**.
+
+---
+
+### 3. Strands Agents SDK is Luna's orchestration layer
+
+Inside AgentCore, Luna is built using the **Strands Agents SDK**.
+
+Strands provides the agent loop that connects:
+
+```text
+User goal
+   ↓
+LLM reasoning
+   ↓
+Choose a tool
+   ↓
+Observe the result
+   ↓
+Reason about the new evidence
+   ↓
+Choose the next action
+   ↓
+Continue until the goal is completed
+```
+
+Instead of hard-coding one fixed sequence of API calls, Luna is given a set of tools and instructions. The agent determines which tools are appropriate based on the user's goal and the evidence returned during execution.
+
+This is what turns Luna from a traditional workflow into an **agentic system**.
+
+---
+
+### 4. Amazon Bedrock provides the intelligence
+
+The Strands agent uses a foundation model through **Amazon Bedrock** for reasoning.
+
+Bedrock helps Luna understand the user's intent, interpret evidence returned by tools, compare candidates, decide which additional information is needed, and determine the appropriate next step.
+
+The separation is roughly:
+
+```text
+Amazon Bedrock
+      ↓
+Reasoning
+
+Strands Agents SDK
+      ↓
+Agent orchestration + tool use
+
+Amazon Bedrock AgentCore
+      ↓
+Production agent runtime
+```
+
+---
+
+### 5. Luna's capabilities are implemented as tools
+
+Each external capability is exposed to the Strands agent as a tool.
+
+```text
+Strands Agent
+     │
+     ├── GitHub Search Tool
+     ├── X Search Tool
+     ├── Google Contacts Tool
+     ├── Gmail Relationship Tool
+     ├── Gmail Send Tool
+     ├── Slack People Search Tool
+     ├── Calendar Availability Tool
+     └── Calendar Event Tool
+```
+
+The tools have different responsibilities.
+
+| Tool / Service | Role in Luna |
+|---|---|
+| GitHub | Discover technical people and inspect public technical/project evidence |
+| X | Discover public professional and interest signals |
+| Google Contacts | Determine whether a candidate or potential connector already exists in the user's network |
+| Gmail | Look for evidence of an existing relationship or previous communication |
+| Slack | Search the user's connected workspace for additional connection signals |
+| Gmail Send | Execute outreach after explicit human approval |
+| Google Calendar | Check real availability and create approved meetings |
+
+This allows the model to **reason**, while deterministic application code performs the actual external actions.
+
+---
+
+### 6. Luna discovers and ranks candidates
+
+For a networking request, Luna can first use **GitHub and X** to discover people relevant to the user's goal.
+
+```text
+User goal
+    ↓
+GitHub + X
+    ↓
+Candidate evidence
+    ↓
+Compare and rank
+    ↓
+Strongest candidates
+```
+
+Candidate recommendations must be grounded in information returned by the tools. Luna is instructed not to invent people, qualifications, or evidence.
+
+---
+
+### 7. Luna tries to verify a real connection path
+
+Finding a good person is only part of networking. Luna then tries to determine whether the user has a credible way to reach that person.
+
+It can search:
+
+```text
+Google Contacts
+       +
+     Gmail
+       +
+     Slack
+       ↓
+Relationship evidence
+```
+
+These sources provide different signals.
+
+For example, previous email history is stronger evidence of an existing relationship than simply belonging to the same Slack workspace.
+
+Luna evaluates the evidence rather than automatically calling every signal a "warm connection."
+
+---
+
+### 8. Luna has a no-hallucination fallback
+
+If Luna cannot verify a credible warm path, the workflow does not fail — and Luna does not invent one.
+
+```text
+Strong candidate
+      ↓
+Search connection evidence
+      ↓
+Credible warm path?
+   ↙             ↘
+ YES              NO
+  ↓                ↓
+Warm introduction  State that no credible
+path               warm path was verified
+                       ↓
+                  Direct outreach
+```
+
+The candidate can still be recommended. Luna simply changes the strategy from a warm introduction to direct outreach.
+
+---
+
+### 9. Human approval separates reasoning from consequential actions
+
+Luna can autonomously research, compare, verify, and prepare actions.
+
+But sending an email or creating a calendar event crosses an execution boundary.
+
+For those actions:
+
+```text
+Luna reasons
+     ↓
+Prepares action
+     ↓
+Creates pending approval
+     ↓
+STOPS
+     ↓
+Human reviews
+     ↓
+Explicit approval
+     ↓
+Action executes
+```
+
+Pending approvals are stored in **Amazon DynamoDB**, rather than existing only inside the model's conversation.
+
+This creates a deterministic boundary between:
+
+**AI reasoning** and **real-world execution**.
+
+---
+
+### 10. Approved outreach is executed through Gmail
+
+Once the user explicitly approves an outreach action, Luna executes the approved Gmail operation.
+
+```text
+Prepared outreach
+      ↓
+Human approval
+      ↓
+Validate approval
+      ↓
+Gmail API
+      ↓
+Email sent
+      ↓
+Result returned to Luna
+```
+
+Luna therefore does not claim that an email was sent simply because the model decided to send one. The external action must actually execute.
+
+---
+
+### 11. Luna can continue from outreach to scheduling
+
+The workflow can continue into Google Calendar.
+
+Luna can check real availability first:
+
+```text
+Google Calendar
+      ↓
+Free/busy information
+      ↓
+Available time
+```
+
+Creating an event requires another explicit approval:
+
+```text
+Proposed meeting
+      ↓
+Human approval
+      ↓
+Google Calendar API
+      ↓
+Meeting created
+```
+
+This lets one networking goal move from **discovery all the way to a real meeting**.
+
+---
+
+### 12. AWS services provide the production infrastructure
+
+Several AWS services support the agent around the Strands reasoning loop.
+
+| AWS Service | Purpose |
+|---|---|
+| Amazon Bedrock | Foundation-model reasoning |
+| Amazon Bedrock AgentCore | Runs the deployed Luna agent |
+| Strands Agents SDK | Agent orchestration and tool calling |
+| AWS Lambda | Authenticated API bridge and asynchronous job execution |
+| Amazon API Gateway | Public backend API |
+| Amazon DynamoDB | Async jobs, approval state, and provider-token/application state |
+| AWS Secrets Manager | Secure storage for API/OAuth credentials |
+| AWS IAM | Controls access between AWS resources |
+| Amazon CloudWatch / AgentCore Observability | Runtime logging, debugging, and observability |
+
+User authentication and profile information are integrated with **Supabase**, while AWS runs the agent and its execution infrastructure.
+
+---
+
+### Putting Everything Together
+
+A complete Luna workflow looks like this:
+
+```text
+USER
+"Find me a technical cofounder..."
+        ↓
+LUNA WEB APP
+        ↓
+AUTHENTICATED API
+        ↓
+API GATEWAY + LAMBDA
+        ↓
+BEDROCK AGENTCORE
+        ↓
+STRANDS AGENT
+        ↓
+AMAZON BEDROCK
+        ↓
+UNDERSTAND NETWORKING GOAL
+        ↓
+DISCOVER
+GitHub + X
+        ↓
+RANK
+Source-grounded candidates
+        ↓
+VERIFY
+Google Contacts + Gmail + Slack
+        ↓
+CONNECTION DECISION
+Warm path OR direct outreach
+        ↓
+PREPARE OUTREACH
+        ↓
+HUMAN APPROVAL
+        ↓
+GMAIL EXECUTION
+        ↓
+CHECK CALENDAR
+        ↓
+HUMAN APPROVAL
+        ↓
+CREATE MEETING
+        ↓
+GOAL COMPLETED
+```
+
+The result is a system where **Bedrock provides reasoning, Strands orchestrates the agent and its tools, AgentCore runs the agent, AWS services provide the production infrastructure, and external applications allow Luna to perform real work.**
+
+The goal is not simply to answer:
+
+> "Who should I meet?"
+
+It is to take the user's networking objective from **intent → evidence → connection → approved action → real meeting**.
+---
+
 ## Getting Started
 
 ### Prerequisites
