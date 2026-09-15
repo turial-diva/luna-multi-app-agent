@@ -1,5 +1,6 @@
 import { BedrockAgentCoreApp } from 'bedrock-agentcore/runtime';
-import { Agent, McpClient, tool, type ToolList } from '@strands-agents/sdk';
+import { createAgentCoreMemoryStores } from 'bedrock-agentcore/memory/strands';
+import { Agent, McpClient, tool, IntervalTrigger, type ToolList } from '@strands-agents/sdk';
 import { z } from 'zod';
 import { loadModel } from './model/load.js';
 import { getStreamableHttpMcpClient } from './mcp_client/client.js';
@@ -113,10 +114,20 @@ SOURCE HONESTY:
 - Never invent an X handle, relationship, qualification, location, or warm introduction path.
 `;
 
+const userProfileSchema = z.object({
+  displayName: z.string().nullable().optional(),
+  role: z.string().nullable().optional(),
+  about: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  interests: z.array(z.string()).nullable().optional(),
+  networkingGoals: z.string().nullable().optional(),
+}).optional();
+
 const requestSchema = z.object({
   prompt: z.string().default(''),
   userId: z.string().optional(),
   userEmail: z.string().optional(),
+  userProfile: userProfileSchema,
 });
 
 const AGENT_CACHE_LIMIT = 128;
@@ -151,10 +162,44 @@ async function getOrCreateAgent(
     sessionTools.push(createSearchSlackPeople(userId));
   }
 
+  const memoryStores = userId
+    ? createAgentCoreMemoryStores({
+        memoryId: 'Luna_LunaUserMemory-PDLNjg6Hfr',
+        actorId: userId,
+        sessionId,
+        namespaces: [
+          {
+            namespace: '/users/{actorId}/preferences',
+            name: 'user-preferences',
+            writable: true,
+          },
+          {
+            namespace: '/users/{actorId}/facts',
+            name: 'user-facts',
+          },
+          {
+            namespace: '/summaries/{actorId}/{sessionId}',
+            name: 'session-summary',
+          },
+        ],
+        extraction: { cadence: new IntervalTrigger({ turns: 1 }) },
+        region: 'us-east-1',
+      })
+    : [];
+
   const agent = new Agent({
     model,
     systemPrompt: SYSTEM_PROMPT,
     tools: sessionTools,
+    ...(memoryStores.length > 0
+      ? {
+          memoryManager: {
+            stores: memoryStores,
+            injection: true,
+            searchToolConfig: true,
+          },
+        }
+      : {}),
   });
   agentCache.set(sessionId, agent);
   return agent;
@@ -171,6 +216,7 @@ const app = new BedrockAgentCoreApp({
       let normalizedPrompt = payload.prompt;
       let normalizedUserId = payload.userId;
       let normalizedUserEmail = payload.userEmail;
+      let normalizedUserProfile = payload.userProfile;
 
       if (!normalizedUserId && typeof payload.prompt === 'string') {
         try {
@@ -187,6 +233,13 @@ const app = new BedrockAgentCoreApp({
 
             if (typeof parsed.userEmail === 'string') {
               normalizedUserEmail = parsed.userEmail;
+            }
+
+            if (
+              parsed.userProfile &&
+              typeof parsed.userProfile === 'object'
+            ) {
+              normalizedUserProfile = parsed.userProfile;
             }
           }
         } catch {
@@ -268,14 +321,74 @@ const app = new BedrockAgentCoreApp({
           timeZoneName: 'short',
         }).format(new Date());
 
+        const profileLines: string[] = [];
+
+        if (normalizedUserProfile?.displayName) {
+          profileLines.push(
+            `Name: ${normalizedUserProfile.displayName}`
+          );
+        }
+
+        if (normalizedUserProfile?.role) {
+          profileLines.push(
+            `Role: ${normalizedUserProfile.role}`
+          );
+        }
+
+        if (normalizedUserProfile?.city) {
+          profileLines.push(
+            `City: ${normalizedUserProfile.city}`
+          );
+        }
+
+        if (
+          Array.isArray(normalizedUserProfile?.interests) &&
+          normalizedUserProfile.interests.length > 0
+        ) {
+          profileLines.push(
+            `Interests: ${normalizedUserProfile.interests.join(', ')}`
+          );
+        }
+
+        if (normalizedUserProfile?.about) {
+          profileLines.push(
+            `About: ${normalizedUserProfile.about}`
+          );
+        }
+
+        if (normalizedUserProfile?.networkingGoals) {
+          profileLines.push(
+            `Networking goals: ${normalizedUserProfile.networkingGoals}`
+          );
+        }
+
+        const userProfileContext =
+          profileLines.length > 0
+            ? profileLines.join('\n')
+            : 'No additional profile information is available.';
+
         const promptWithTimeContext = `
+
 CURRENT DATE/TIME:
+
 The current date and time in America/Toronto is ${currentTorontoTime}.
+
 Use this when interpreting relative dates such as today, tomorrow, tonight, next week, Monday, or this weekend.
+
 Never invent or assume a different current date.
 
+SIGNED-IN USER PROFILE:
+
+${userProfileContext}
+
+Treat this profile as trusted context for the signed-in user.
+Use it when relevant instead of asking the user to repeat information already present here.
+Do not invent profile details that are not provided.
+
 USER REQUEST:
+
 ${normalizedPrompt}
+
 `;
 
         for await (const event of agent.stream(promptWithTimeContext)) {

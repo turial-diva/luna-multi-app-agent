@@ -16,7 +16,7 @@
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@opentelemetry/api": "^1.9.0",
     "@strands-agents/sdk": "^1.5.0",
-    "bedrock-agentcore": "^0.3.0",
+    "bedrock-agentcore": "^0.4.4",
     "dotenv": "^17.4.2",
     "googleapis": "^180.0.0",
     "tsx": "^4.19.0",

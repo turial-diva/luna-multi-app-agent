@@ -6,6 +6,7 @@ import {
   DynamoDBDocumentClient,
   PutCommand,
   GetCommand,
+  UpdateCommand,
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
 
@@ -83,6 +84,46 @@ export async function getPendingAction<T>(
   }
 
   return item;
+}
+
+
+export async function updatePendingActionPayload<T>(
+  approvalId: string,
+  expectedActionType: string,
+  payload: T
+) {
+  const existing = await getPendingAction<T>(
+    approvalId,
+    expectedActionType
+  );
+
+  if (!existing) {
+    throw new Error('Approval request not found, expired, or already used.');
+  }
+
+  await db.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        approvalId,
+      },
+      UpdateExpression: 'SET #payload = :payload',
+      ConditionExpression: '#actionType = :actionType',
+      ExpressionAttributeNames: {
+        '#payload': 'payload',
+        '#actionType': 'actionType',
+      },
+      ExpressionAttributeValues: {
+        ':payload': payload,
+        ':actionType': expectedActionType,
+      },
+    })
+  );
+
+  return {
+    approvalId,
+    updated: true,
+  };
 }
 
 export async function deletePendingAction(

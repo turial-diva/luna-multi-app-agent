@@ -62,6 +62,7 @@ const AGENT_RUNTIME_ARN =
 
 const PROVIDER_TOKEN_TABLE = 'LunaProviderTokens';
 const AGENT_JOBS_TABLE = 'LunaAgentJobs';
+const PENDING_ACTIONS_TABLE = 'LunaPendingActions';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -99,7 +100,7 @@ const headers = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'content-type,authorization',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
 };
 
 let googleCredentialsCache = null;
@@ -1425,17 +1426,83 @@ function getUserScopedRuntimeSessionId(
     .digest('hex');
 }
 
+
+async function getUserProfile(userId, accessToken) {
+  try {
+    const profileResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${encodeURIComponent(userId)}&select=display_name,role,about,location_city,interests`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      }
+    );
+
+    const settingsResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/luna_settings?user_id=eq.${encodeURIComponent(userId)}&select=networking_goals`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      }
+    );
+
+    const profiles = profileResponse.ok
+      ? await profileResponse.json()
+      : [];
+
+    const settings = settingsResponse.ok
+      ? await settingsResponse.json()
+      : [];
+
+    const profile = profiles?.[0] ?? {};
+    const lunaSettings = settings?.[0] ?? {};
+
+    return {
+      displayName: profile.display_name ?? null,
+      role: profile.role ?? null,
+      about: profile.about ?? null,
+      city: profile.location_city ?? null,
+      interests: Array.isArray(profile.interests)
+        ? profile.interests
+        : [],
+      networkingGoals:
+        lunaSettings.networking_goals ?? null,
+    };
+  } catch (error) {
+    console.error('Failed to load Luna user profile:', error);
+
+    return {
+      displayName: null,
+      role: null,
+      about: null,
+      city: null,
+      interests: [],
+      networkingGoals: null,
+    };
+  }
+}
+
 async function executeAgent({
   userId,
   email,
   prompt,
   sessionId,
+  accessToken,
 }) {
   const runtimeSessionId =
     getUserScopedRuntimeSessionId(
       userId,
       sessionId
     );
+
+  const userProfile = await getUserProfile(userId, accessToken);
 
   const command =
     new InvokeAgentRuntimeCommand({
@@ -1446,6 +1513,7 @@ async function executeAgent({
         prompt,
         userId,
         userEmail: email,
+        userProfile,
       }),
       contentType: 'application/json',
       accept:
@@ -1479,6 +1547,256 @@ async function executeAgent({
   return agentResponse;
 }
 
+
+async function handlePendingActionUpdate(event) {
+  let auth;
+
+  try {
+    auth = await authenticate(event);
+  } catch (error) {
+    console.error(
+      'Pending action update authentication failed:',
+      error
+    );
+
+    return unauthorized(
+      'Invalid or expired authentication token'
+    );
+  }
+
+  let body;
+
+  try {
+    body =
+      typeof event.body === 'string'
+        ? JSON.parse(event.body)
+        : event.body ?? {};
+  } catch {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        error: 'Invalid JSON body',
+      }),
+    };
+  }
+
+  const approvalId = body?.approvalId;
+  const to = body?.to;
+  const subject = body?.subject;
+  const emailBody = body?.body;
+  const cc = body?.cc;
+
+  if (
+    !approvalId ||
+    typeof approvalId !== 'string'
+  ) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        error: 'approvalId is required',
+      }),
+    };
+  }
+
+  if (
+    !to ||
+    typeof to !== 'string' ||
+    !to.includes('@')
+  ) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        error: 'A valid recipient email is required',
+      }),
+    };
+  }
+
+  if (
+    !subject ||
+    typeof subject !== 'string' ||
+    !subject.trim()
+  ) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        error: 'subject is required',
+      }),
+    };
+  }
+
+  if (
+    !emailBody ||
+    typeof emailBody !== 'string' ||
+    !emailBody.trim()
+  ) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        error: 'body is required',
+      }),
+    };
+  }
+
+  let result;
+
+  try {
+    console.log(
+      'Pending draft lookup starting:',
+      approvalId
+    );
+
+    result = await dynamoClient.send(
+      new GetCommand({
+        TableName: PENDING_ACTIONS_TABLE,
+        Key: {
+          approvalId,
+        },
+      })
+    );
+
+    console.log(
+      'Pending draft lookup succeeded:',
+      approvalId,
+      Boolean(result.Item)
+    );
+  } catch (error) {
+    console.error(
+      'Pending Gmail draft lookup failed:',
+      error?.name,
+      error?.message,
+      error?.stack
+    );
+
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        error: 'Failed to load pending Gmail draft',
+        errorType: error?.name ?? 'UnknownError',
+      }),
+    };
+  }
+
+  const pending = result.Item;
+
+  if (
+    !pending ||
+    pending.actionType !== 'gmail_send'
+  ) {
+    return {
+      statusCode: 404,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        error:
+          'Pending Gmail approval not found or already used',
+      }),
+    };
+  }
+
+  if (
+    pending.expiresAt &&
+    Math.floor(Date.now() / 1000) >
+      pending.expiresAt
+  ) {
+    return {
+      statusCode: 410,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        error: 'Approval request has expired',
+      }),
+    };
+  }
+
+  const currentPayload = pending.payload ?? {};
+
+  const updatedPayload = {
+    ...currentPayload,
+    to: to.trim(),
+    subject: subject.trim(),
+    body: emailBody,
+    cc:
+      typeof cc === 'string' && cc.trim()
+        ? cc.trim()
+        : null,
+  };
+
+  try {
+    await dynamoClient.send(
+      new UpdateCommand({
+        TableName: PENDING_ACTIONS_TABLE,
+        Key: {
+          approvalId,
+        },
+        UpdateExpression:
+          'SET #payload = :payload',
+        ConditionExpression:
+          '#actionType = :actionType',
+        ExpressionAttributeNames: {
+          '#payload': 'payload',
+          '#actionType': 'actionType',
+        },
+        ExpressionAttributeValues: {
+          ':payload': updatedPayload,
+          ':actionType': 'gmail_send',
+        },
+      })
+    );
+  } catch (error) {
+    console.error(
+      'Pending Gmail draft DynamoDB update failed:',
+      error?.name,
+      error?.message,
+      error?.stack
+    );
+
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        error: 'Failed to update pending Gmail draft',
+        errorType: error?.name ?? 'UnknownError',
+      }),
+    };
+  }
+
+  console.log(
+    'Pending Gmail draft updated:',
+    approvalId,
+    auth.userId
+  );
+
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({
+      success: true,
+      approvalId,
+      status: 'draft_updated',
+      message: 'Draft updated — not sent',
+      email: {
+        to: updatedPayload.to,
+        cc: updatedPayload.cc,
+        subject: updatedPayload.subject,
+        body: updatedPayload.body,
+      },
+    }),
+  };
+}
+
 async function handleAgent(event) {
   let auth;
 
@@ -1494,6 +1812,16 @@ async function handleAgent(event) {
       'Invalid or expired authentication token'
     );
   }
+
+  const authorization =
+    event?.headers?.authorization ??
+    event?.headers?.Authorization ??
+    '';
+
+  const accessToken =
+    authorization.startsWith('Bearer ')
+      ? authorization.slice(7).trim()
+      : '';
 
   const body =
     typeof event.body === 'string'
@@ -1553,6 +1881,7 @@ async function handleAgent(event) {
             userEmail: auth.email,
             prompt,
             sessionId,
+            accessToken,
           })
         ),
       })
@@ -1613,6 +1942,7 @@ async function processAgentJob(event) {
     userEmail,
     prompt,
     sessionId,
+    accessToken,
   } = event;
 
   try {
@@ -1639,6 +1969,7 @@ async function processAgentJob(event) {
         email: userEmail,
         prompt,
         sessionId,
+        accessToken,
       });
 
     await dynamoClient.send(
@@ -1822,6 +2153,10 @@ export const handler = async (event) => {
 
     if (routeKey === 'GET /agent/status') {
       return await handleAgentStatus(event);
+    }
+
+    if (routeKey === 'PATCH /agent/pending-action') {
+      return await handlePendingActionUpdate(event);
     }
 
     if (routeKey === 'POST /agent') {
