@@ -156,6 +156,12 @@ luna-multi-app-agent/
 
 ---
 
+## Architecture
+
+![Luna AWS Architecture](luna-architecture.png)
+
+---
+
 ## How Luna Was Built — From User Request to Real-World Action
 
 Luna is not a single API call or a chatbot connected to a few services. It is a multi-step agent system built by combining **Strands Agents SDK, Amazon Bedrock, Amazon Bedrock AgentCore, AWS infrastructure, and six external applications**.
